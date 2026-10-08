@@ -1,12 +1,13 @@
 # TrackFyp Backend
 
-Render service for TrackFyp.
+Node/Express backend for TrackFyp.
 
-## Start
-`npm install`
-`npm start`
+## Render
+- Build: `npm install`
+- Start: `node server.js`
+- Service: `trackfyp-backend-new`
 
-## Environment variables
+Required environment variables:
 - GEMINI_API_KEY
 - SAFEPAY_PUBLIC_KEY
 - SAFEPAY_SECRET_KEY
@@ -14,16 +15,18 @@ Render service for TrackFyp.
 - SUPABASE_KEY
 - ADMIN_EMAIL
 
-Do not put secret values in GitHub.
+## Endpoints
+- `/api/health`
+- `/api/analyze`
+- `/api/channel-analyze`
+- `/api/download`
+- `/api/download-file`
+- `/api/shadowban-check`
+- `/api/trending`
+- `/api/premium-analyze`
+- `/api/ai-text`
+- `/api/create-checkout`
+- `/api/safepay-webhook`
+- `/api/check-subscription`
 
-## Main endpoints
-- GET /api/analyze?url=
-- GET /api/download-file?url=
-- GET /api/channel-analyze?url=
-- GET /api/trending?country=
-- GET /api/shadowban-check?url=
-- POST /api/premium-analyze (multipart: video,email)
-- POST /api/ai-text (JSON: email,task,topic,...)
-- POST /api/create-checkout (JSON: email,plan)
-- POST /api/safepay-webhook
-- GET /api/check-subscription?email=
+Never commit real API keys to GitHub.

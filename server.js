@@ -55,44 +55,117 @@ function normalizeUrl(url) {
   return url;
 }
 
-async function fetchTikTokItem(videoUrl) {
-  const response = await axios.get(videoUrl, {
+async function fetchTikTokOembed(url) {
+  const response = await axios.get("https://www.tiktok.com/oembed", {
+    params: { url },
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; TrackFyp/1.0)" },
+    timeout: 20000,
+  });
+  return response.data || {};
+}
+
+async function fetchTikTokPage(url) {
+  const response = await axios.get(url, {
     headers: {
       "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+      Accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+      Referer: "https://www.tiktok.com/",
     },
     maxRedirects: 5,
+    timeout: 20000,
   });
-  const html = response.data;
-  const match = html.match(
-    /<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>(.*?)<\/script>/s
-  );
-  if (!match) throw new Error("PAGE_STRUCTURE_CHANGED");
-  const jsonData = JSON.parse(match[1]);
-  const item =
-    jsonData?.__DEFAULT_SCOPE__?.["webapp.video-detail"]?.itemInfo
-      ?.itemStruct;
-  if (!item) throw new Error("NO_ITEM_DATA");
-  return item;
+  return response.data;
+}
+
+function extractJsonScript(html, ids) {
+  for (const id of ids) {
+    const re = new RegExp('<script[^>]+id=["\\\']' + id + '["\\\'][^>]*>([\\s\\S]*?)<\\/script>', 'i');
+    const m = html.match(re);
+    if (m) {
+      try { return JSON.parse(m[1]); } catch (_) {}
+    }
+  }
+  return null;
+}
+
+async function resolveTikTokUrl(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (host === "vt.tiktok.com" || host === "vm.tiktok.com") {
+      const response = await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0" }, maxRedirects: 5, timeout: 15000 });
+      return response.request?.res?.responseUrl || url;
+    }
+  } catch (err) {
+    console.error("TikTok short-link resolve failed:", err.message);
+  }
+  return url;
+}
+
+async function fetchTikTokItem(videoUrl) {
+  const resolvedUrl = await resolveTikTokUrl(videoUrl);
+  try {
+    const html = await fetchTikTokPage(resolvedUrl);
+    const jsonData = extractJsonScript(html, [
+      "__UNIVERSAL_DATA_FOR_REHYDRATION__",
+      "SIGI_STATE",
+      "__NEXT_DATA__",
+    ]);
+    const item =
+      jsonData?.__DEFAULT_SCOPE__?.["webapp.video-detail"]?.itemInfo?.itemStruct ||
+      jsonData?.ItemModule && Object.values(jsonData.ItemModule)[0] ||
+      jsonData?.props?.pageProps?.itemInfo?.itemStruct;
+    if (item) return item;
+  } catch (err) {
+    console.error("TikTok page fetch failed:", err.message);
+  }
+
+  // TikTok officially exposes oEmbed metadata. It does not expose download URLs,
+  // but it gives us reliable public title/creator information for analysis.
+  const o = await fetchTikTokOembed(resolvedUrl);
+  if (!o || (!o.title && !o.author_name)) throw new Error("NO_VIDEO_DATA");
+  return {
+    __oembed: true,
+    desc: o.title || "",
+    author: { uniqueId: (o.author_url || "").split("/@")[1]?.split("/")[0] || "" },
+    authorName: o.author_name || "",
+    video: {},
+    stats: {},
+  };
 }
 
 async function fetchTikTokProfile(profileUrl) {
-  const response = await axios.get(profileUrl, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-    },
-    maxRedirects: 5,
-  });
-  const html = response.data;
-  const match = html.match(
-    /<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>(.*?)<\/script>/s
-  );
-  if (!match) throw new Error("PAGE_STRUCTURE_CHANGED");
-  const jsonData = JSON.parse(match[1]);
-  const userInfo = jsonData?.__DEFAULT_SCOPE__?.["webapp.user-detail"]?.userInfo;
-  if (!userInfo) throw new Error("NO_PROFILE_DATA");
-  return userInfo;
+  const resolvedUrl = await resolveTikTokUrl(profileUrl);
+  try {
+    const html = await fetchTikTokPage(resolvedUrl);
+    const jsonData = extractJsonScript(html, [
+      "__UNIVERSAL_DATA_FOR_REHYDRATION__",
+      "SIGI_STATE",
+      "__NEXT_DATA__",
+    ]);
+    let userInfo = jsonData?.__DEFAULT_SCOPE__?.["webapp.user-detail"]?.userInfo || null;
+    if (!userInfo && jsonData?.UserModule?.users) {
+      const username = Object.keys(jsonData.UserModule.users)[0];
+      if (username) {
+        userInfo = {
+          user: jsonData.UserModule.users[username],
+          stats: jsonData.UserModule.stats?.[username] || {},
+        };
+      }
+    }
+    if (userInfo) return userInfo;
+  } catch (err) {
+    console.error("TikTok profile fetch failed:", err.message);
+  }
+
+  const o = await fetchTikTokOembed(resolvedUrl);
+  if (!o || (!o.author_name && !o.title)) throw new Error("NO_PROFILE_DATA");
+  const username = (o.author_url || profileUrl).match(/tiktok\.com\/@([^/?]+)/i)?.[1] || "";
+  return {
+    __oembed: true,
+    user: { uniqueId: username, nickname: o.author_name || "" },
+    stats: {},
+  };
 }
 
 app.get("/api/download", async (req, res) => {
@@ -129,12 +202,12 @@ app.get("/api/analyze", async (req, res) => {
     const item = await fetchTikTokItem(videoUrl);
 
     const stats = item.stats || {};
-    const views = stats.playCount || 0;
-    const likes = stats.diggCount || 0;
-    const comments = stats.commentCount || 0;
-    const shares = stats.shareCount || 0;
+    const views = Number(stats.playCount || 0);
+    const likes = Number(stats.diggCount || 0);
+    const comments = Number(stats.commentCount || 0);
+    const shares = Number(stats.shareCount || 0);
     const caption = item.desc || "";
-    const durationSec = item.video?.duration || 0;
+    const durationSec = Number(item.video?.duration || 0);
     const hashtagCount = (caption.match(/#/g) || []).length;
     const genericTags = ["fyp", "viral", "foryou", "foryoupage"];
     const hasOnlyGeneric =
@@ -177,9 +250,12 @@ app.get("/api/analyze", async (req, res) => {
     if (durationSec > 0 && durationSec <= 45) score += 10;
     score = Math.max(0, Math.min(100, Math.round(score)));
 
+    const title = item.authorName ? `${item.authorName}: ${caption}` : caption;
     res.json({
       success: true,
+      source: item.__oembed ? "TikTok oEmbed" : "TikTok public page",
       score,
+      title,
       views,
       likes,
       comments,
@@ -248,7 +324,9 @@ app.get("/api/channel-analyze", async (req, res) => {
     const avgLikesPerVideo = videoCount > 0 ? Math.round(heartCount / videoCount) : 0;
 
     const diagnosis = [];
-    if (videoCount < 10) {
+    if (userInfo.__oembed && !videoCount) {
+      diagnosis.push({ type: "warn", text: "TikTok ne is public profile ke detailed stats expose nahi kiye. Basic profile information mil gayi hai; detailed stats ke liye TikTok authorization/API access chahiye." });
+    } else if (videoCount < 10) {
       diagnosis.push({ type: "warn", text: "Abhi sirf " + videoCount + " videos hain — consistent posting se growth tez ho sakti hai." });
     } else {
       diagnosis.push({ type: "good", text: videoCount + " videos post ki ja chuki hain — achi consistency ka sign hai." });
@@ -264,7 +342,19 @@ app.get("/api/channel-analyze", async (req, res) => {
       diagnosis.push({ type: "warn", text: "Following count, followers se zyada hai — organic growth par focus karein." });
     }
 
-    res.json({ success: true, followerCount, followingCount, heartCount, videoCount, avgLikesPerVideo, diagnosis });
+    const user = userInfo.user || userInfo.userInfo || {};
+    res.json({
+      success: true,
+      source: userInfo.__oembed ? "TikTok oEmbed" : "TikTok public page",
+      username: user.uniqueId || user.unique_id || "",
+      name: user.nickname || user.nickName || userInfo.authorName || "",
+      followerCount,
+      followingCount,
+      heartCount,
+      videoCount,
+      avgLikesPerVideo,
+      diagnosis,
+    });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({
@@ -312,6 +402,9 @@ app.get("/api/shadowban-check", async (req, res) => {
     const followerCount = Number(stats.followerCount) || 0;
     const heartCount = Number(stats.heartCount || stats.heart) || 0;
     const videoCount = Number(stats.videoCount) || 0;
+    if (userInfo.__oembed && !followerCount && !videoCount) {
+      return res.json({ success: true, riskLevel: "Not enough public data", riskReason: "TikTok ne is profile ke public stats expose nahi kiye, is liye reliable shadowban estimate nahi diya ja sakta.", followerCount: 0, avgLikesPerVideo: 0, videoCount: 0 });
+    }
     const avgLikesPerVideo = videoCount > 0 ? heartCount / videoCount : 0;
     const likeRatio = followerCount > 0 ? avgLikesPerVideo / followerCount : 0;
 
@@ -364,7 +457,7 @@ async function isActiveSubscriber(email) {
 app.post("/api/premium-analyze", upload.single("video"), async (req, res) => {
   const email = req.body.email;
   if (!req.file) return res.status(400).json({ error: "Video file nahi mili." });
-  if (!email) return res.status(400).json({ error: "Email zaroori hai." });
+  if (!email) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: "Email zaroori hai." }); }
 
   const allowed = await isActiveSubscriber(email);
   if (!allowed) {
@@ -401,8 +494,10 @@ Sirf JSON return karein, kuch aur text nahi.`;
     );
 
     const rawText = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    const cleaned = rawText.replace(/```json|```/g, "").trim();
-    const result = JSON.parse(cleaned);
+    const cleaned = rawText.replace(/```json|```/gi, "").trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("GEMINI_JSON_MISSING");
+    const result = JSON.parse(jsonMatch[0]);
     res.json({ success: true, ...result });
   } catch (err) {
     console.error(err.message);
@@ -540,6 +635,10 @@ app.get("/api/check-subscription", async (req, res) => {
   const email = req.query.email;
   const active = await isActiveSubscriber(email);
   res.json({ active });
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, service: "trackfyp-backend", time: new Date().toISOString() });
 });
 
 app.listen(PORT, () => {
