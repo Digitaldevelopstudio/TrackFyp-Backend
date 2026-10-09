@@ -102,8 +102,76 @@ async function resolveTikTokUrl(url) {
   return url;
 }
 
+function getTikTokHandle(profileUrl) {
+  try {
+    const u = new URL(profileUrl);
+    const match = u.pathname.match(/\/@([^/?]+)/);
+    return match ? match[1] : "";
+  } catch (_) {
+    return "";
+  }
+}
+
+async function fetchScrapeCreatorsProfile(profileUrl) {
+  const apiKey = process.env.SCRAPECREATORS_API_KEY;
+  const handle = getTikTokHandle(profileUrl);
+  if (!apiKey || !handle) return null;
+  const response = await axios.get("https://api.scrapecreators.com/v1/tiktok/profile", {
+    params: { handle },
+    headers: { "x-api-key": apiKey, Accept: "application/json" },
+    timeout: 25000,
+  });
+  const data = response.data || {};
+  if (!data.user && !data.stats) throw new Error("ScrapeCreators profile response missing user/stats");
+  return { ...data, __scrapeCreators: true };
+}
+
+async function fetchScrapeCreatorsVideo(videoUrl) {
+  const apiKey = process.env.SCRAPECREATORS_API_KEY;
+  if (!apiKey) return null;
+  const response = await axios.get("https://api.scrapecreators.com/v2/tiktok/video", {
+    params: { url: videoUrl },
+    headers: { "x-api-key": apiKey, Accept: "application/json" },
+    timeout: 30000,
+  });
+  const data = response.data || {};
+  const detail = data.aweme_detail || data.itemInfo?.itemStruct || data.item || null;
+  if (!detail) throw new Error("ScrapeCreators video response missing aweme_detail");
+  const st = detail.statistics || detail.stats || {};
+  const v = detail.video || {};
+  const author = detail.author || {};
+  const firstUrl = (x) => Array.isArray(x) ? x[0] : x;
+  return {
+    ...detail,
+    __scrapeCreators: true,
+    desc: detail.desc || detail.title || "",
+    author: { ...author, uniqueId: author.uniqueId || author.unique_id || author.username || "" },
+    authorName: author.nickname || author.nickName || author.name || "",
+    stats: {
+      playCount: Number(st.play_count ?? st.playCount ?? 0),
+      diggCount: Number(st.digg_count ?? st.diggCount ?? st.like_count ?? 0),
+      commentCount: Number(st.comment_count ?? st.commentCount ?? 0),
+      shareCount: Number(st.share_count ?? st.shareCount ?? 0),
+    },
+    video: {
+      ...v,
+      duration: Number(v.duration ?? detail.duration ?? 0),
+      playAddr: firstUrl(v.download_no_watermark_addr?.url_list) || firstUrl(v.play_addr?.url_list) || v.playAddr || "",
+      downloadAddr: firstUrl(v.download_addr?.url_list) || v.downloadAddr || "",
+    },
+  };
+}
+
 async function fetchTikTokItem(videoUrl) {
   const resolvedUrl = await resolveTikTokUrl(videoUrl);
+  if (process.env.SCRAPECREATORS_API_KEY) {
+    try {
+      const providerItem = await fetchScrapeCreatorsVideo(resolvedUrl);
+      if (providerItem) return providerItem;
+    } catch (err) {
+      console.error("ScrapeCreators video API failed; trying TikTok public page:", err.response?.status || err.message);
+    }
+  }
   try {
     const html = await fetchTikTokPage(resolvedUrl);
     const jsonData = extractJsonScript(html, [
@@ -314,7 +382,15 @@ app.get("/api/channel-analyze", async (req, res) => {
     return res.status(400).json({ error: "Sahi TikTok profile link daalein (jaise tiktok.com/@username)." });
   }
   try {
-    const userInfo = await fetchTikTokProfile(profileUrl);
+    let userInfo = null;
+    if (process.env.SCRAPECREATORS_API_KEY) {
+      try {
+        userInfo = await fetchScrapeCreatorsProfile(profileUrl);
+      } catch (err) {
+        console.error("ScrapeCreators profile API failed; trying TikTok public page:", err.response?.status || err.message);
+      }
+    }
+    if (!userInfo) userInfo = await fetchTikTokProfile(profileUrl);
     const stats = userInfo.stats || userInfo.statsV2 || {};
     const followerCount = Number(stats.followerCount) || 0;
     const followingCount = Number(stats.followingCount) || 0;
@@ -345,7 +421,7 @@ app.get("/api/channel-analyze", async (req, res) => {
     const user = userInfo.user || userInfo.userInfo || {};
     res.json({
       success: true,
-      source: userInfo.__oembed ? "TikTok oEmbed" : "TikTok public page",
+      source: userInfo.__scrapeCreators ? "ScrapeCreators API" : (userInfo.__oembed ? "TikTok oEmbed" : "TikTok public page"),
       username: user.uniqueId || user.unique_id || "",
       name: user.nickname || user.nickName || userInfo.authorName || "",
       followerCount,
@@ -397,7 +473,15 @@ app.get("/api/shadowban-check", async (req, res) => {
     return res.status(400).json({ error: "Sahi TikTok profile link daalein." });
   }
   try {
-    const userInfo = await fetchTikTokProfile(profileUrl);
+    let userInfo = null;
+    if (process.env.SCRAPECREATORS_API_KEY) {
+      try {
+        userInfo = await fetchScrapeCreatorsProfile(profileUrl);
+      } catch (err) {
+        console.error("ScrapeCreators shadowban profile API failed; trying TikTok public page:", err.response?.status || err.message);
+      }
+    }
+    if (!userInfo) userInfo = await fetchTikTokProfile(profileUrl);
     const stats = userInfo.stats || userInfo.statsV2 || {};
     const followerCount = Number(stats.followerCount) || 0;
     const heartCount = Number(stats.heartCount || stats.heart) || 0;
