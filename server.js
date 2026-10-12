@@ -89,15 +89,43 @@ function extractJsonScript(html, ids) {
   return null;
 }
 
+function isSupportedTikTokLink(value) {
+  try {
+    const host = new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+    return host === "tiktok.com" || host.endsWith(".tiktok.com") || host === "tt.site" || host.endsWith(".tt.site");
+  } catch (_) {
+    return false;
+  }
+}
+
+function normalizeProfileInput(value) {
+  if (!value) return "";
+  let input = String(value).trim();
+  // Accept a plain username or @username, as well as a full profile URL.
+  if (/^@?[A-Za-z0-9._]{2,50}$/.test(input)) {
+    input = input.replace(/^@/, "");
+    return "https://www.tiktok.com/@" + input;
+  }
+  return normalizeUrl(input);
+}
+
 async function resolveTikTokUrl(url) {
   try {
-    const host = new URL(url).hostname.toLowerCase();
-    if (host === "vt.tiktok.com" || host === "vm.tiktok.com") {
-      const response = await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0" }, maxRedirects: 5, timeout: 15000 });
-      return response.request?.res?.responseUrl || url;
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    const looksShort = (host === "vt.tiktok.com" || host === "vm.tiktok.com" || host === "tt.site") || /\/(t|share)\//i.test(parsed.pathname);
+    if (looksShort) {
+      const response = await axios.get(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36" },
+        maxRedirects: 10,
+        timeout: 20000,
+        validateStatus: status => status >= 200 && status < 400,
+      });
+      const finalUrl = response.request?.res?.responseUrl || response.request?._redirectable?._currentUrl || response.config?.url;
+      if (finalUrl && isSupportedTikTokLink(finalUrl)) return finalUrl;
     }
   } catch (err) {
-    console.error("TikTok short-link resolve failed:", err.message);
+    console.error("TikTok short-link resolve failed:", err.response?.status || err.message);
   }
   return url;
 }
@@ -238,7 +266,7 @@ async function fetchTikTokProfile(profileUrl) {
 
 app.get("/api/download", async (req, res) => {
   const videoUrl = normalizeUrl(req.query.url);
-  if (!videoUrl || !videoUrl.includes("tiktok.com")) {
+  if (!videoUrl || !isSupportedTikTokLink(videoUrl)) {
     return res.status(400).json({ error: "Sahi TikTok video link daalein." });
   }
   try {
@@ -263,7 +291,7 @@ app.get("/api/download", async (req, res) => {
 
 app.get("/api/analyze", async (req, res) => {
   const videoUrl = normalizeUrl(req.query.url);
-  if (!videoUrl || !videoUrl.includes("tiktok.com")) {
+  if (!videoUrl || !isSupportedTikTokLink(videoUrl)) {
     return res.status(400).json({ error: "Sahi TikTok video link daalein." });
   }
   try {
@@ -350,7 +378,7 @@ app.get("/api/analyze", async (req, res) => {
 // fetch karke stream kar deta hai — isse TikTok ka "Access Denied" nahi aata.
 app.get("/api/download-file", async (req, res) => {
   const videoUrl = normalizeUrl(req.query.url);
-  if (!videoUrl || !videoUrl.includes("tiktok.com")) {
+  if (!videoUrl || !isSupportedTikTokLink(videoUrl)) {
     return res.status(400).send("Sahi TikTok video link daalein.");
   }
   try {
@@ -377,20 +405,21 @@ app.get("/api/download-file", async (req, res) => {
 });
 
 app.get("/api/channel-analyze", async (req, res) => {
-  const profileUrl = normalizeUrl(req.query.url);
-  if (!profileUrl || !profileUrl.includes("tiktok.com/@")) {
-    return res.status(400).json({ error: "Sahi TikTok profile link daalein (jaise tiktok.com/@username)." });
+  const profileUrl = normalizeProfileInput(req.query.url);
+  if (!profileUrl || !isSupportedTikTokLink(profileUrl) || !getTikTokHandle(profileUrl)) {
+    return res.status(400).json({ error: "TikTok username ya profile link daalein (jaise @username ya tiktok.com/@username)." });
   }
   try {
+    const resolvedProfileUrl = await resolveTikTokUrl(profileUrl);
     let userInfo = null;
     if (process.env.SCRAPECREATORS_API_KEY) {
       try {
-        userInfo = await fetchScrapeCreatorsProfile(profileUrl);
+        userInfo = await fetchScrapeCreatorsProfile(resolvedProfileUrl);
       } catch (err) {
         console.error("ScrapeCreators profile API failed; trying TikTok public page:", err.response?.status || err.message);
       }
     }
-    if (!userInfo) userInfo = await fetchTikTokProfile(profileUrl);
+    if (!userInfo) userInfo = await fetchTikTokProfile(resolvedProfileUrl);
     const stats = userInfo.stats || userInfo.statsV2 || {};
     const followerCount = Number(stats.followerCount) || 0;
     const followingCount = Number(stats.followingCount) || 0;
