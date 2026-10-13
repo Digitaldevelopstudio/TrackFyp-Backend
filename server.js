@@ -168,7 +168,14 @@ async function fetchScrapeCreatorsVideo(videoUrl) {
   const st = detail.statistics || detail.stats || {};
   const v = detail.video || {};
   const author = detail.author || {};
+  const music = detail.music || detail.aweme_music || detail.added_sound_music_info || {};
   const firstUrl = (x) => Array.isArray(x) ? x[0] : x;
+  const noWatermarkAddr = firstUrl(v.download_no_watermark_addr?.url_list) ||
+    (!v.has_watermark ? firstUrl(v.play_addr?.url_list) : "") || v.noWatermarkAddr || "";
+  const watermarkAddr = (v.has_watermark ? firstUrl(v.play_addr?.url_list) : "") ||
+    firstUrl(v.download_addr?.url_list) || v.watermarkAddr || "";
+  const audioUrl = firstUrl(music.play_url?.url_list) || firstUrl(music.playUrl?.url_list) ||
+    music.playUrl || music.play_url || "";
   return {
     ...detail,
     __scrapeCreators: true,
@@ -184,9 +191,13 @@ async function fetchScrapeCreatorsVideo(videoUrl) {
     video: {
       ...v,
       duration: Number(v.duration ?? detail.duration ?? 0),
-      playAddr: firstUrl(v.download_no_watermark_addr?.url_list) || firstUrl(v.play_addr?.url_list) || v.playAddr || "",
-      downloadAddr: firstUrl(v.download_addr?.url_list) || v.downloadAddr || "",
+      playAddr: noWatermarkAddr || firstUrl(v.play_addr?.url_list) || v.playAddr || "",
+      downloadAddr: watermarkAddr || firstUrl(v.download_addr?.url_list) || v.downloadAddr || "",
+      noWatermarkAddr,
+      watermarkAddr,
+      has_watermark: Boolean(v.has_watermark),
     },
+    music: { ...music, playUrl: audioUrl },
   };
 }
 
@@ -373,34 +384,89 @@ app.get("/api/analyze", async (req, res) => {
   }
 });
 
-// ---- /api/download-file?url=<tiktok video link> ----
-// Video ko seedha browser se TikTok CDN se khulwane ki bajaye, backend khud
-// fetch karke stream kar deta hai — isse TikTok ka "Access Denied" nahi aata.
+// ---- /api/download-file?url=<TikTok URL>&type=video|audio&watermark=0|1 ----
+// Stream media through TrackFyp's backend. The frontend downloads it as a Blob,
+// so the visitor stays on TrackFyp instead of seeing the Render service URL.
 app.get("/api/download-file", async (req, res) => {
   const videoUrl = normalizeUrl(req.query.url);
+  const mediaType = String(req.query.type || "video").toLowerCase();
+  const withWatermark = String(req.query.watermark || "0") === "1";
   if (!videoUrl || !isSupportedTikTokLink(videoUrl)) {
-    return res.status(400).send("Sahi TikTok video link daalein.");
+    return res.status(400).send("Sahi public TikTok video link daalein.");
+  }
+  if (!["video", "audio"].includes(mediaType)) {
+    return res.status(400).send("Video ya audio select karein.");
   }
   try {
     const item = await fetchTikTokItem(videoUrl);
-    const noWatermarkUrl = item.video?.playAddr || item.video?.downloadAddr;
-    if (!noWatermarkUrl) return res.status(500).send("Download link nahi mila.");
+    if (item.__oembed) {
+      return res.status(422).send("Is link se download media nahi mila. TikTok video ka Share > Copy link wala link try karein.");
+    }
 
-    const videoStream = await axios.get(noWatermarkUrl, {
+    let mediaUrl = "";
+    let filename = "trackfyp-video.mp4";
+    if (mediaType === "audio") {
+      mediaUrl = item.music?.playUrl || item.music?.play_url?.url_list?.[0] ||
+        item.aweme_music?.play_url?.url_list?.[0] || item.added_sound_music_info?.play_url?.url_list?.[0] || "";
+      filename = "trackfyp-audio.m4a";
+    } else if (withWatermark) {
+      mediaUrl = item.video?.watermarkAddr || item.video?.downloadAddr ||
+        (item.video?.has_watermark ? item.video?.playAddr : "") || "";
+      filename = "trackfyp-video-with-watermark.mp4";
+    } else {
+      mediaUrl = item.video?.noWatermarkAddr || item.video?.playAddr ||
+        (!item.video?.has_watermark ? item.video?.downloadAddr : "") || "";
+      filename = "trackfyp-video-no-watermark.mp4";
+    }
+
+    if (!mediaUrl || typeof mediaUrl !== "string") {
+      return res.status(422).send(mediaType === "audio"
+        ? "Is TikTok post ka audio download link available nahi hai. Doosri public video try karein."
+        : (withWatermark
+          ? "Watermark wali video ka link available nahi hai. Without watermark option try karein."
+          : "Without-watermark video link available nahi hai. With watermark option try karein."));
+    }
+
+    // Only proxy known TikTok media hosts to avoid turning this route into an open proxy.
+    let mediaHost;
+    try { mediaHost = new URL(mediaUrl).hostname.toLowerCase(); } catch (_) { mediaHost = ""; }
+    if (!mediaHost || !(/(^|\.)tiktokcdn[^.]*\.com$/.test(mediaHost) || mediaHost.endsWith("tiktokv.com") || mediaHost.endsWith("byteoversea.com") || mediaHost.endsWith("ibytedtos.com") || mediaHost.endsWith("muscdn.com"))) {
+      return res.status(422).send("TikTok ne supported media link return nahi kiya. Doosri public video try karein.");
+    }
+
+    const mediaResponse = await axios.get(mediaUrl, {
       responseType: "stream",
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
         Referer: "https://www.tiktok.com/",
+        Accept: "*/*",
       },
+      timeout: 45000,
+      maxRedirects: 5,
+      validateStatus: status => status >= 200 && status < 300,
     });
 
-    res.setHeader("Content-Disposition", 'attachment; filename="trackfyp-video.mp4"');
-    res.setHeader("Content-Type", "video/mp4");
-    videoStream.data.pipe(res);
+    const upstreamType = String(mediaResponse.headers["content-type"] || "").split(";")[0];
+    if (mediaType === "audio") {
+      if (upstreamType.includes("mpeg") || upstreamType.includes("mp3")) filename = "trackfyp-audio.mp3";
+      else if (upstreamType.includes("mp4") || upstreamType.includes("m4a")) filename = "trackfyp-audio.m4a";
+      res.setHeader("Content-Type", upstreamType.startsWith("audio/") ? upstreamType : "audio/mp4");
+    } else {
+      res.setHeader("Content-Type", "video/mp4");
+    }
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Cache-Control", "no-store");
+    if (mediaResponse.headers["content-length"]) res.setHeader("Content-Length", mediaResponse.headers["content-length"]);
+    mediaResponse.data.on("error", err => {
+      console.error("Media stream error:", err.message);
+      if (!res.headersSent) res.status(502);
+      res.end();
+    });
+    mediaResponse.data.pipe(res);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Video download mein masla hua.");
+    console.error("Download proxy failed:", err.response?.status || err.message);
+    if (!res.headersSent) res.status(502).send("Download abhi available nahi. Link check karein ya kuch der baad dobara try karein.");
+    else res.end();
   }
 });
 
