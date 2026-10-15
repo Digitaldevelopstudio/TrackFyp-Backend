@@ -468,27 +468,36 @@ app.get("/api/channel-analyze", async (req, res) => {
   }
 });
 
-const COUNTRY_MAP = { pk: "PK", in: "IN", ae: "AE", us: "US", uk: "GB", global: "" };
+const COUNTRY_MAP = {"af":"AF","al":"AL","dz":"DZ","as":"AS","ad":"AD","ao":"AO","ai":"AI","aq":"AQ","ag":"AG","ar":"AR","am":"AM","aw":"AW","au":"AU","at":"AT","az":"AZ","bs":"BS","bh":"BH","bd":"BD","bb":"BB","by":"BY","be":"BE","bz":"BZ","bj":"BJ","bm":"BM","bt":"BT","bo":"BO","bq":"BQ","ba":"BA","bw":"BW","bv":"BV","br":"BR","io":"IO","bn":"BN","bg":"BG","bf":"BF","bi":"BI","cv":"CV","kh":"KH","cm":"CM","ca":"CA","ky":"KY","cf":"CF","td":"TD","cl":"CL","cn":"CN","cx":"CX","cc":"CC","co":"CO","km":"KM","ck":"CK","cr":"CR","hr":"HR","cu":"CU","cw":"CW","cy":"CY","cz":"CZ","dk":"DK","dj":"DJ","dm":"DM","do":"DO","cd":"CD","ec":"EC","eg":"EG","sv":"SV","gq":"GQ","er":"ER","ee":"EE","sz":"SZ","et":"ET","fk":"FK","fo":"FO","fj":"FJ","fi":"FI","fr":"FR","gf":"GF","pf":"PF","tf":"TF","ga":"GA","gm":"GM","ge":"GE","de":"DE","gh":"GH","gi":"GI","gr":"GR","gl":"GL","gd":"GD","gp":"GP","gu":"GU","gt":"GT","gg":"GG","gn":"GN","gw":"GW","gy":"GY","ht":"HT","hm":"HM","va":"VA","hn":"HN","hk":"HK","hu":"HU","is":"IS","in":"IN","id":"ID","ir":"IR","iq":"IQ","ie":"IE","im":"IM","il":"IL","it":"IT","ci":"CI","jm":"JM","jp":"JP","je":"JE","jo":"JO","kz":"KZ","ke":"KE","ki":"KI","kw":"KW","kg":"KG","la":"LA","lv":"LV","lb":"LB","ls":"LS","lr":"LR","ly":"LY","li":"LI","lt":"LT","lu":"LU","mo":"MO","mg":"MG","mw":"MW","my":"MY","mv":"MV","ml":"ML","mt":"MT","mh":"MH","mq":"MQ","mr":"MR","mu":"MU","yt":"YT","mx":"MX","fm":"FM","md":"MD","mc":"MC","mn":"MN","me":"ME","ms":"MS","ma":"MA","mz":"MZ","mm":"MM","na":"NA","nr":"NR","np":"NP","nl":"NL","nc":"NC","nz":"NZ","ni":"NI","ne":"NE","ng":"NG","nu":"NU","nf":"NF","kp":"KP","mk":"MK","mp":"MP","no":"NO","om":"OM","pk":"PK","pw":"PW","ps":"PS","pa":"PA","pg":"PG","py":"PY","pe":"PE","ph":"PH","pn":"PN","pl":"PL","pt":"PT","pr":"PR","qa":"QA","cg":"CG","ro":"RO","ru":"RU","rw":"RW","re":"RE","bl":"BL","sh":"SH","kn":"KN","lc":"LC","mf":"MF","pm":"PM","vc":"VC","ws":"WS","sm":"SM","st":"ST","sa":"SA","sn":"SN","rs":"RS","sc":"SC","sl":"SL","sg":"SG","sx":"SX","sk":"SK","si":"SI","sb":"SB","so":"SO","za":"ZA","gs":"GS","kr":"KR","ss":"SS","es":"ES","lk":"LK","sd":"SD","sr":"SR","sj":"SJ","se":"SE","ch":"CH","sy":"SY","tw":"TW","tj":"TJ","tz":"TZ","th":"TH","tl":"TL","tg":"TG","tk":"TK","to":"TO","tt":"TT","tn":"TN","tr":"TR","tm":"TM","tc":"TC","tv":"TV","ug":"UG","ua":"UA","ae":"AE","gb":"GB","us":"US","um":"UM","uy":"UY","uz":"UZ","vu":"VU","ve":"VE","vn":"VN","vg":"VG","vi":"VI","wf":"WF","eh":"EH","ye":"YE","zm":"ZM","zw":"ZW","ax":"AX","global":"","afghanistan":"AF","albania":"AL","algeria":"DZ","american samoa":"AS","andorra":"AD","angola":"AO","anguilla":"AI","antarctica":"AQ","antigua and barbuda":"AG","argentina":"AR","armenia":"AM","aruba":"AW","australia":"AU","austria":"AT","azerbaijan":"AZ","bahamas":"BS","bahrain":"BH","bangladesh":"BD","barbados":"BB","belarus":"BY","belgium":"BE","belize":"BZ","benin":"BJ","bermuda":"BM","bhutan":"BT","bolivia":"BO","bonaire, sint eustatius and saba":"BQ","bosnia and herzegovina":"BA","botswana":"BW","bouvet island":"BV","brazil":"BR","british indian ocean territory":"IO","brunei":"BN","bulgaria":"BG","burkina faso":"BF","burundi":"BI","cabo verde":"CV","cambodia":"KH","cameroon":"CM","canada":"CA","cayman islands":"KY","central african republic":"CF","chad":"TD","chile":"CL","china":"CN","christmas island":"CX","cocos (keeling) islands":"CC","colombia":"CO","comoros":"KM","cook islands":"CK","costa rica":"CR","croatia":"HR","cuba":"CU","curaçao":"CW","cyprus":"CY","czechia":"CZ","denmark":"DK","djibouti":"DJ","dominica":"DM","dominican republic":"DO","dr congo":"CD","ecuador":"EC","egypt":"EG","el salvador":"SV","equatorial guinea":"GQ","eritrea":"ER","estonia":"EE","eswatini":"SZ","ethiopia":"ET","falkland islands (malvinas)":"FK","faroe islands":"FO","fiji":"FJ","finland":"FI","france":"FR","french guiana":"GF","french polynesia":"PF","french southern territories":"TF","gabon":"GA","gambia":"GM","georgia":"GE","germany":"DE","ghana":"GH","gibraltar":"GI","greece":"GR","greenland":"GL","grenada":"GD","guadeloupe":"GP","guam":"GU","guatemala":"GT","guernsey":"GG","guinea":"GN","guinea-bissau":"GW","guyana":"GY","haiti":"HT","heard island and mcdonald islands":"HM","holy see (vatican city state)":"VA","honduras":"HN","hong kong":"HK","hungary":"HU","iceland":"IS","india":"IN","indonesia":"ID","iran":"IR","iraq":"IQ","ireland":"IE","isle of man":"IM","israel":"IL","italy":"IT","ivory coast":"CI","jamaica":"JM","japan":"JP","jersey":"JE","jordan":"JO","kazakhstan":"KZ","kenya":"KE","kiribati":"KI","kuwait":"KW","kyrgyzstan":"KG","laos":"LA","latvia":"LV","lebanon":"LB","lesotho":"LS","liberia":"LR","libya":"LY","liechtenstein":"LI","lithuania":"LT","luxembourg":"LU","macao":"MO","madagascar":"MG","malawi":"MW","malaysia":"MY","maldives":"MV","mali":"ML","malta":"MT","marshall islands":"MH","martinique":"MQ","mauritania":"MR","mauritius":"MU","mayotte":"YT","mexico":"MX","micronesia":"FM","moldova":"MD","monaco":"MC","mongolia":"MN","montenegro":"ME","montserrat":"MS","morocco":"MA","mozambique":"MZ","myanmar":"MM","namibia":"NA","nauru":"NR","nepal":"NP","netherlands":"NL","new caledonia":"NC","new zealand":"NZ","nicaragua":"NI","niger":"NE","nigeria":"NG","niue":"NU","norfolk island":"NF","north korea":"KP","north macedonia":"MK","northern mariana islands":"MP","norway":"NO","oman":"OM","pakistan":"PK","palau":"PW","palestine":"PS","panama":"PA","papua new guinea":"PG","paraguay":"PY","peru":"PE","philippines":"PH","pitcairn":"PN","poland":"PL","portugal":"PT","puerto rico":"PR","qatar":"QA","republic of the congo":"CG","romania":"RO","russia":"RU","rwanda":"RW","réunion":"RE","saint barthélemy":"BL","saint helena, ascension and tristan da cunha":"SH","saint kitts and nevis":"KN","saint lucia":"LC","saint martin (french part)":"MF","saint pierre and miquelon":"PM","saint vincent and the grenadines":"VC","samoa":"WS","san marino":"SM","sao tome and principe":"ST","saudi arabia":"SA","senegal":"SN","serbia":"RS","seychelles":"SC","sierra leone":"SL","singapore":"SG","sint maarten (dutch part)":"SX","slovakia":"SK","slovenia":"SI","solomon islands":"SB","somalia":"SO","south africa":"ZA","south georgia and the south sandwich islands":"GS","south korea":"KR","south sudan":"SS","spain":"ES","sri lanka":"LK","sudan":"SD","suriname":"SR","svalbard and jan mayen":"SJ","sweden":"SE","switzerland":"CH","syria":"SY","taiwan":"TW","tajikistan":"TJ","tanzania":"TZ","thailand":"TH","timor-leste":"TL","togo":"TG","tokelau":"TK","tonga":"TO","trinidad and tobago":"TT","tunisia":"TN","turkey":"TR","turkmenistan":"TM","turks and caicos islands":"TC","tuvalu":"TV","uganda":"UG","ukraine":"UA","united arab emirates":"AE","united kingdom":"GB","united states":"US","united states minor outlying islands":"UM","uruguay":"UY","uzbekistan":"UZ","vanuatu":"VU","venezuela":"VE","vietnam":"VN","virgin islands, british":"VG","virgin islands, u.s.":"VI","wallis and futuna":"WF","western sahara":"EH","yemen":"YE","zambia":"ZM","zimbabwe":"ZW","åland islands":"AX","qatar / gcc":"QA","gcc":"AE","united states of america":"US","uk":"GB","usa":"US","czech republic":"CZ","uae":"AE"};
 app.get("/api/trending", async (req, res) => {
-  const country = COUNTRY_MAP[req.query.country] ?? "";
+  const rawCountry = String(req.query.country || "global").trim().toLowerCase();
+  const country = COUNTRY_MAP[rawCountry] !== undefined ? COUNTRY_MAP[rawCountry] : (rawCountry.length === 2 ? rawCountry.toUpperCase() : "");
+  const niche = String(req.query.niche || "short-form video content").trim().slice(0, 160);
   try {
-    const response = await axios.get(
-      "https://ads.tiktok.com/creative_radar_api/v1/popular_trend/hashtag/list",
-      {
-        params: { page: 1, limit: 10, period: 7, country_code: country, sort_by: "popular" },
-        headers: { "User-Agent": "Mozilla/5.0" },
-      }
-    );
-    const list = response.data?.data?.list || [];
-    res.json({
-      success: true,
-      trends: list.map((t) => ({ hashtag: t.hashtag_name, posts: t.video_views || t.publish_cnt || null })),
+    const response = await axios.get("https://ads.tiktok.com/creative_radar_api/v1/popular_trend/hashtag/list", {
+      params: { page: 1, limit: 12, period: 7, country_code: country, sort_by: "popular" },
+      headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" }, timeout: 12000
     });
+    const list = response.data?.data?.list || response.data?.data?.hashtags || [];
+    const trends = list.map(t => ({ hashtag: String(t.hashtag_name || t.name || t.hashtag || "").replace(/^#/, "#"), posts: t.video_views || t.publish_cnt || t.video_count || null, description: "Public trend signal from TikTok Creative Center" })).filter(t => t.hashtag);
+    if (trends.length) return res.json({ success: true, source: "TikTok public trend signals", trends, disclaimer: "Public signals can change and do not guarantee reach." });
+    console.warn("TikTok trend source returned no usable rows for country:", country || "global");
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({
-      error: "Trending data abhi fetch nahi ho saka — TikTok ne format badla ho sakta hai. Thodi der baad try karein.",
-    });
+    console.error("TikTok trend source unavailable:", err.response?.status || err.message);
+  }
+  // Honest fallback: useful AI ideas, explicitly not represented as live trend data.
+  if (!process.env.GEMINI_API_KEY) return res.json({ success: true, source: "No live trend data available", trends: [], ideas: [], disclaimer: "Public trend data was unavailable and GEMINI_API_KEY is not configured." });
+  try {
+    const prompt = `Create 8 specific short-form video content opportunities for the market ${country || "worldwide"} and niche ${niche}. These are evergreen/AI-generated ideas, NOT verified live trends. Return only valid JSON array. Each item: {"title":"short angle","description":"why it may interest this audience","hook":"one opening hook","action":"one practical filming/publishing action"}. Do not claim current trend status, statistics, or viral guarantees. Use concise English.`;
+    const ai = await geminiGenerate([{ parts: [{ text: prompt }] }], 30000);
+    const raw = ai.data?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("\n") || "";
+    const clean = raw.replace(/```json|```/gi, "").trim();
+    const match = clean.match(/\[[\s\S]*\]/);
+    const ideas = match ? JSON.parse(match[0]) : [];
+    return res.json({ success: true, source: "AI-generated content opportunities (not live trends)", trends: [], ideas, disclaimer: "These are AI-generated ideas, not verified live trending topics." });
+  } catch (err) {
+    console.error("Trend AI fallback failed:", err.response?.status || err.message);
+    return res.json({ success: true, source: "No trend data available", trends: [], ideas: [], disclaimer: "Live public trend data and AI fallback are temporarily unavailable. Try again later." });
   }
 });
 
@@ -571,6 +580,29 @@ async function isActiveSubscriber(email) {
   return String(record?.status || "").toLowerCase() === "active";
 }
 
+async function geminiGenerate(contents, timeout = 45000) {
+  const preferred = String(process.env.GEMINI_MODEL || "gemini-2.5-flash-lite").replace(/^models\//, "").trim();
+  const models = [...new Set([preferred, "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"])];
+  let lastError;
+  for (let i = 0; i < models.length; i++) {
+    try {
+      return await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/${models[i]}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        { contents },
+        { timeout }
+      );
+    } catch (err) {
+      lastError = err;
+      const status = err.response?.status;
+      const detail = String(err.response?.data?.error?.message || err.message || "").toLowerCase();
+      const modelProblem = status === 404 || (status === 400 && /model|not found|unsupported/.test(detail));
+      if (!modelProblem || i === models.length - 1) throw err;
+      console.warn(`Gemini model ${models[i]} rejected; trying fallback model.`);
+    }
+  }
+  throw lastError || new Error("Gemini request failed");
+}
+
 function geminiUserError(err) {
   const status = err.response?.status;
   const detail = String(err.response?.data?.error?.message || err.response?.data?.error || err.message || "");
@@ -610,11 +642,7 @@ app.post("/api/premium-channel-analyze", async (req, res) => {
     const username = user.uniqueId || user.unique_id || getTikTokHandle(resolvedProfileUrl) || "";
     const name = user.nickname || user.nickName || userInfo.authorName || username;
     const prompt = `You are a professional short-form video growth strategist. Audit this public TikTok profile and return a useful Premium-level report in clear Roman Urdu. Do not invent data. If metrics are missing, say so.\nProfile: @${username}; display name: ${name}; followers: ${followers}; following: ${following}; total likes: ${likes}; videos: ${videos}; approximate average likes per video (total likes divided by videos, not per-post observed average): ${avgLikes}.\nProvide: (1) executive summary, (2) 3 evidence-based strengths, (3) 3 likely growth bottlenecks, (4) 5 prioritized actions for the next 7 days, (5) 3 content series tailored to this profile, (6) engagement/follower ratio interpretation with clear limitations. No guaranteed viral claims. Keep headings and concise bullet points.`;
-    const geminiRes = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || "gemini-2.5-flash-lite"}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      { contents: [{ parts: [{ text: prompt }] }] },
-      { timeout: 45000 }
-    );
+    const geminiRes = await geminiGenerate([{ parts: [{ text: prompt }] }], 45000);
     const analysis = geminiRes.data?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("\n").trim() || "";
     if (!analysis) return res.status(502).json({ error: "Gemini ne analysis return nahi ki. Render logs check karein." });
     res.json({ success: true, source: userInfo.__scrapeCreators ? "ScrapeCreators API" : (userInfo.__oembed ? "TikTok oEmbed" : "TikTok public page"), username, name, metrics: { followers, following, likes, videos, avgLikes }, analysis });
@@ -626,8 +654,16 @@ app.post("/api/premium-channel-analyze", async (req, res) => {
   }
 });
 
-app.post("/api/premium-analyze", upload.single("video"), async (req, res) => {
-  const email = req.body.email;
+app.post("/api/premium-analyze", (req, res, next) => {
+  upload.single("video")(req, res, (err) => {
+    if (err) {
+      const message = err.code === "LIMIT_FILE_SIZE" ? "Video 50 MB se chhoti honi chahiye." : (err.message || "Video upload fail hua.");
+      return res.status(400).json({ error: message });
+    }
+    next();
+  });
+}, async (req, res) => {
+  const email = String(req.body.email || "").trim().toLowerCase();
   if (!req.file) return res.status(400).json({ error: "Video file nahi mili." });
   if (!email) { fs.unlinkSync(req.file.path); return res.status(400).json({ error: "Email zaroori hai." }); }
 
@@ -637,7 +673,8 @@ app.post("/api/premium-analyze", upload.single("video"), async (req, res) => {
     return res.status(402).json({ error: "Ye email Premium subscriber nahi hai. Pehle subscribe karein." });
   }
   if (!process.env.GEMINI_API_KEY) {
-    return res.status(500).json({ error: "Server par AI key set nahi hai." });
+    fs.rmSync(req.file.path, { force: true });
+    return res.status(503).json({ error: "Render Environment mein GEMINI_API_KEY set nahi hai." });
   }
 
   const framesDir = fs.mkdtempSync(path.join(os.tmpdir(), "frames-"));
@@ -660,10 +697,7 @@ app.post("/api/premium-analyze", upload.single("video"), async (req, res) => {
 3. "suggestions": array of 2-3 chhote, actionable Roman Urdu suggestions
 Sirf JSON return karein, kuch aur text nahi.`;
 
-    const geminiRes = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || "gemini-2.5-flash-lite"}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      { contents: [{ parts: [{ text: prompt }, ...imageParts] }] }
-    );
+    const geminiRes = await geminiGenerate([{ parts: [{ text: prompt }, ...imageParts] }], 60000);
 
     const rawText = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     const cleaned = rawText.replace(/```json|```/gi, "").trim();
@@ -700,11 +734,7 @@ app.post("/api/ai-text", async (req, res) => {
   };
   const prompt = taskMap[task] || `Help a TikTok creator with topic ${topic}.`;
   try {
-    const geminiRes = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || "gemini-2.5-flash-lite"}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      { contents: [{ parts: [{ text: prompt }] }] },
-      { timeout: 45000 }
-    );
+    const geminiRes = await geminiGenerate([{ parts: [{ text: prompt }] }], 45000);
     const text = geminiRes.data?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("\n") || "";
     if (!text) return res.status(500).json({ error: "AI ne empty response diya." });
     res.json({ success: true, text });
