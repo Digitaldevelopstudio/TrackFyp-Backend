@@ -31,3 +31,6 @@ Environment variables used by this project:
 - `/api/check-subscription`
 
 The ScrapeCreators integration uses `GET https://api.scrapecreators.com/v2/tiktok/video?url=...` for video metadata and `GET https://api.scrapecreators.com/v1/tiktok/profile?handle=...` for profile metadata, authenticated via the `x-api-key` header.
+
+
+Safepay checkout update: recurring subscriptions now use the official auth-token + /checkout/auth/login flow. The checkout host is selected from SAFEPAY_ENV to avoid a stale or mistyped checkout-host environment variable. Configure SAFEPAY_SECRET_KEY, SAFEPAY_HOST, SAFEPAY_ENV, and optionally FRONTEND_URL in Render.
