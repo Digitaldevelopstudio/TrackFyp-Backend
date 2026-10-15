@@ -718,16 +718,31 @@ Sirf JSON return karein, kuch aur text nahi.`;
 
 // ---- /api/ai-text ----
 app.post("/api/ai-text", async (req, res) => {
-  const { email, task, topic, caption, duration, goal } = req.body || {};
+  const { email, task, topic, caption, duration, goal, videoUrl } = req.body || {};
   if (!email) return res.status(400).json({ error: "Subscription email zaroori hai." });
   if (!await isActiveSubscriber(email)) return res.status(402).json({ error: "Is email par active Premium nahi mila. Safepay wali email use karein." });
   if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: "Render Environment mein GEMINI_API_KEY set nahi hai." });
-  if (!topic) return res.status(400).json({ error: "Topic zaroori hai." });
+  if (!topic && !(task === "seo" && videoUrl)) return res.status(400).json({ error: "Topic ya public TikTok video link zaroori hai." });
+  let videoContext = "";
+  if (task === "seo" && videoUrl) {
+    const normalizedVideoUrl = normalizeUrl(String(videoUrl).trim());
+    if (!isSupportedTikTokLink(normalizedVideoUrl)) return res.status(400).json({ error: "Valid public TikTok video link enter karein." });
+    try {
+      const item = await fetchTikTokItem(normalizedVideoUrl);
+      const stats = item.stats || item.statistics || {};
+      const author = item.author || {};
+      videoContext = `\nPublic TikTok video context (metadata only; no claim that visual content was watched): URL=${normalizedVideoUrl}; creator=@${author.uniqueId || author.unique_id || "unknown"}; caption/title=${String(item.desc || item.title || "").slice(0, 1500)}; views=${stats.playCount ?? stats.play_count ?? "unavailable"}; likes=${stats.diggCount ?? stats.digg_count ?? "unavailable"}; comments=${stats.commentCount ?? stats.comment_count ?? "unavailable"}; shares=${stats.shareCount ?? stats.share_count ?? "unavailable"}.`;
+    } catch (err) {
+      console.error("Video SEO metadata lookup failed:", err.response?.status || err.message);
+      return res.status(502).json({ error: "TikTok link ka public metadata fetch nahi ho saka. Public full video URL try karein ya topic/caption manually enter karein." });
+    }
+  }
+  const topicForPrompt = topic || "the linked TikTok video";
   const taskMap = {
     hooks: `Generate 8 strong TikTok hooks for the topic: ${topic}. Return concise Roman Urdu/English-friendly hooks. Avoid fake guarantees.`,
     script: `Write a TikTok script for ${topic}. Duration: ${duration || "30 seconds"}. Structure: hook, value, CTA. Keep it practical and natural.`,
     planner: `Create a 30-day TikTok content plan for niche ${topic}. Goal: ${goal || "grow followers"}. Give day number, idea, hook angle and CTA in a compact list.`,
-    seo: `Optimize TikTok SEO for topic ${topic}. Existing caption: ${caption || "none"}. Return primary keyword, 5 related keywords, a description, 8 hashtags and a CTA.`,
+    seo: `Act as a TikTok SEO strategist. Optimize the linked video/topic ${topicForPrompt}. Existing caption: ${caption || "none"}.${videoContext} Return: observed metadata summary (only if available), primary search keyword, 5 related keywords, SEO-friendly caption/description, 8 relevant hashtags, a CTA, 3 specific growth improvements, and a short note explaining that metadata-only analysis cannot judge visuals or retention. Do not invent unavailable metrics or claim to have watched the video.`,
     cta: `Generate 10 natural TikTok CTAs for topic ${topic}, optimized for ${goal || "engagement"}.`,
     ideas: `Create 15 differentiated TikTok content ideas for niche ${topic}. For each idea include a short title, hook angle, format, and CTA. Avoid generic repeats and fake trends.`,
     trends: `For niche ${topic}, suggest 10 trend-inspired short-form content angles that can be adapted to the creator's own style. Do not claim these are live trending topics unless current data is provided.`
