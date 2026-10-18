@@ -732,22 +732,53 @@ app.post("/api/create-checkout", async (req, res) => {
 
 app.post("/api/safepay-webhook", async (req, res) => {
   try {
-    const event = req.body;
-    console.log("Safepay webhook received:", JSON.stringify(event));
+    const event = req.body || {};
+    const eventType = String(event.type || event.event_type || "").toLowerCase();
+    const data = event.data || {};
+    console.log("Safepay webhook received:", JSON.stringify({ type: eventType, data }));
 
-    const email = event?.data?.metadata?.email || event?.data?.customer_email;
-    const status = event?.data?.state === "TRACKER_ENDED" || event?.status === "success" ? "active" : "inactive";
+    // Safepay subscription events identify the customer with customer_email.
+    // Never activate access from a checkout redirect or subscription.created alone.
+    const email = String(data.metadata?.email || data.customer_email || "").trim().toLowerCase();
+    let status = null;
 
-    if (email && supabase) {
-      await supabase.from("subscribers").upsert({
-        email: email.toLowerCase(),
+    if (eventType === "subscription.payment.succeeded") {
+      status = "active";
+    } else if (
+      eventType === "subscription.payment.failed" ||
+      eventType === "subscription.cancelled" ||
+      eventType === "subscription.canceled" ||
+      eventType === "subscription.ended" ||
+      eventType === "subscription.paused"
+    ) {
+      status = "inactive";
+    } else if (eventType === "subscription.created") {
+      // The initial subscription may be INCOMPLETE until payment is authorized.
+      status = String(data.status || "").toUpperCase() === "ACTIVE" ? "active" : "pending";
+    }
+
+    if (email && status && supabase) {
+      const { error } = await supabase.from("subscribers").upsert({
+        email,
         status,
         updated_at: new Date().toISOString(),
-      });
+      }, { onConflict: "email" });
+      if (error) {
+        console.error("Could not update subscriber from Safepay webhook:", error.message);
+        return res.status(500).json({ error: "Subscriber record update nahi hua." });
+      }
+    } else if (!email) {
+      console.warn("Safepay webhook has no customer email; cannot map it to a TrackFyp account.");
+    } else if (!status) {
+      console.log("Safepay event does not change Premium access:", eventType || "unknown event");
+    } else if (!supabase) {
+      console.error("Supabase is not configured; Premium access cannot be updated.");
+      return res.status(500).json({ error: "Database configured nahi hai." });
     }
-    res.status(200).json({ received: true });
+
+    res.status(200).json({ received: true, eventType, status: status || "ignored" });
   } catch (err) {
-    console.error(err.message);
+    console.error("Safepay webhook error:", err.message);
     res.status(500).json({ error: "Webhook process nahi hua." });
   }
 });

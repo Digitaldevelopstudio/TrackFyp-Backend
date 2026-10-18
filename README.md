@@ -34,3 +34,9 @@ The ScrapeCreators integration uses `GET https://api.scrapecreators.com/v2/tikto
 
 
 Safepay checkout update: recurring subscriptions now use the official auth-token + /checkout/auth/login flow. The checkout host is selected from SAFEPAY_ENV to avoid a stale or mistyped checkout-host environment variable. Configure SAFEPAY_SECRET_KEY, SAFEPAY_HOST, SAFEPAY_ENV, and optionally FRONTEND_URL in Render.
+
+
+## Premium activation fix (Sandbox testing)
+The Safepay webhook handler now maps `subscription.payment.succeeded` to `active`, and failed/cancelled/paused/ended events to `inactive`. `subscription.created` alone does not grant access unless Safepay explicitly reports `ACTIVE`. Configure the Safepay Sandbox webhook endpoint as `https://trackfyp-backend-new.onrender.com/api/safepay-webhook` and subscribe to the subscription events documented by Safepay. Test that the TrackFyp checkout email matches the Safepay customer email.
+
+**Important:** This is a testing fix, not a production security sign-off. Before accepting live payments, add and verify Safepay webhook signature validation using the correct environment-specific webhook secret, then test payment, cancellation, and access revocation end-to-end.
