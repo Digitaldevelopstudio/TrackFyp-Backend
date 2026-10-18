@@ -303,7 +303,9 @@ app.get("/api/analyze", async (req, res) => {
     const comments = Number(stats.commentCount || 0);
     const shares = Number(stats.shareCount || 0);
     const caption = item.desc || "";
-    const durationSec = Number(item.video?.duration || 0);
+    let durationSec = Number(item.video?.duration || 0);
+    if (durationSec > 1000) durationSec = durationSec / 1000;
+    durationSec = Math.round(durationSec * 10) / 10;
     const hashtagCount = (caption.match(/#/g) || []).length;
     const genericTags = ["fyp", "viral", "foryou", "foryoupage"];
     const hasOnlyGeneric =
@@ -581,8 +583,8 @@ async function isActiveSubscriber(email) {
 }
 
 async function geminiGenerate(contents, timeout = 45000) {
-  const preferred = String(process.env.GEMINI_MODEL || "gemini-2.5-flash-lite").replace(/^models\//, "").trim();
-  const models = [...new Set([preferred, "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"])];
+  const preferred = String(process.env.GEMINI_MODEL || "gemini-3.8-flash").replace(/^models\//, "").trim();
+  const models = [...new Set([preferred, "gemini-3.8-flash"])];
   let lastError;
   for (let i = 0; i < models.length; i++) {
     try {
