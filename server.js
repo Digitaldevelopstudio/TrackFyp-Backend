@@ -553,19 +553,78 @@ app.get("/api/shadowban-check", async (req, res) => {
 });
 
 async function isActiveSubscriber(email) {
-  if (!email) return false;
-  if (process.env.ADMIN_EMAIL && email.toLowerCase() === process.env.ADMIN_EMAIL.toLowerCase()) {
-    return true;
-  }
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) return false;
+  if (process.env.ADMIN_EMAIL && normalizedEmail === process.env.ADMIN_EMAIL.trim().toLowerCase()) return true;
   if (!supabase) return false;
   const { data, error } = await supabase
     .from("subscribers")
-    .select("status")
-    .eq("email", email.toLowerCase())
-    .single();
-  if (error || !data) return false;
-  return data.status === "active";
+    .select("status, updated_at")
+    .eq("email", normalizedEmail)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) {
+    console.error("Subscriber lookup failed:", error.message);
+    return false;
+  }
+  const record = Array.isArray(data) ? data[0] : data;
+  return String(record?.status || "").toLowerCase() === "active";
 }
+
+function geminiUserError(err) {
+  const status = err.response?.status;
+  const detail = String(err.response?.data?.error?.message || err.response?.data?.error || err.message || "");
+  console.error("Gemini API error:", status || "network", detail);
+  if (!process.env.GEMINI_API_KEY) return "Render Environment mein GEMINI_API_KEY set nahi hai.";
+  if (status === 400 || status === 404) return "Gemini model/request reject hua. Render logs mein Gemini ka exact error check karein.";
+  if (status === 401 || status === 403) return "Gemini API key invalid hai ya API access enabled nahi. Render mein GEMINI_API_KEY verify karein.";
+  if (status === 429) return "Gemini API quota/rate limit complete hai. Google AI Studio mein quota/billing check karein.";
+  if (!status) return "Gemini API tak connection nahi hua. Render logs aur network status check karein.";
+  return "Gemini AI request fail hui (HTTP " + status + "). Render logs mein details maujood hain.";
+}
+
+app.post("/api/premium-channel-analyze", async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const profileUrl = normalizeProfileInput(req.body?.url);
+  if (!email) return res.status(400).json({ error: "Subscription email zaroori hai." });
+  if (!await isActiveSubscriber(email)) return res.status(402).json({ error: "Is email par active Premium nahi mila. Safepay wali email use karein." });
+  if (!profileUrl || !isSupportedTikTokLink(profileUrl) || !getTikTokHandle(profileUrl)) {
+    return res.status(400).json({ error: "TikTok profile URL ya @username sahi enter karein." });
+  }
+  if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: "Render Environment mein GEMINI_API_KEY set nahi hai." });
+  try {
+    const resolvedProfileUrl = await resolveTikTokUrl(profileUrl);
+    let userInfo = null;
+    if (process.env.SCRAPECREATORS_API_KEY) {
+      try { userInfo = await fetchScrapeCreatorsProfile(resolvedProfileUrl); }
+      catch (err) { console.error("Premium channel ScrapeCreators error:", err.response?.status || err.message); }
+    }
+    if (!userInfo) userInfo = await fetchTikTokProfile(resolvedProfileUrl);
+    const stats = userInfo.stats || userInfo.statsV2 || {};
+    const followers = Number(stats.followerCount) || 0;
+    const following = Number(stats.followingCount) || 0;
+    const likes = Number(stats.heartCount || stats.heart) || 0;
+    const videos = Number(stats.videoCount) || 0;
+    const avgLikes = videos > 0 ? Math.round(likes / videos) : 0;
+    const user = userInfo.user || userInfo.userInfo || {};
+    const username = user.uniqueId || user.unique_id || getTikTokHandle(resolvedProfileUrl) || "";
+    const name = user.nickname || user.nickName || userInfo.authorName || username;
+    const prompt = `You are a professional short-form video growth strategist. Audit this public TikTok profile and return a useful Premium-level report in clear Roman Urdu. Do not invent data. If metrics are missing, say so.\nProfile: @${username}; display name: ${name}; followers: ${followers}; following: ${following}; total likes: ${likes}; videos: ${videos}; approximate average likes per video (total likes divided by videos, not per-post observed average): ${avgLikes}.\nProvide: (1) executive summary, (2) 3 evidence-based strengths, (3) 3 likely growth bottlenecks, (4) 5 prioritized actions for the next 7 days, (5) 3 content series tailored to this profile, (6) engagement/follower ratio interpretation with clear limitations. No guaranteed viral claims. Keep headings and concise bullet points.`;
+    const geminiRes = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || "gemini-2.5-flash-lite"}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      { contents: [{ parts: [{ text: prompt }] }] },
+      { timeout: 45000 }
+    );
+    const analysis = geminiRes.data?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("\n").trim() || "";
+    if (!analysis) return res.status(502).json({ error: "Gemini ne analysis return nahi ki. Render logs check karein." });
+    res.json({ success: true, source: userInfo.__scrapeCreators ? "ScrapeCreators API" : (userInfo.__oembed ? "TikTok oEmbed" : "TikTok public page"), username, name, metrics: { followers, following, likes, videos, avgLikes }, analysis });
+  } catch (err) {
+    const status = err.response?.status || 500;
+    console.error("Premium channel analysis failed:", JSON.stringify(err.response?.data || err.message));
+    if (err.response?.status) return res.status(status >= 500 ? 502 : status).json({ error: geminiUserError(err) });
+    return res.status(500).json({ error: "Profile fetch ya AI audit fail hua. Render logs mein exact cause check karein." });
+  }
+});
 
 app.post("/api/premium-analyze", upload.single("video"), async (req, res) => {
   const email = req.body.email;
@@ -602,7 +661,7 @@ app.post("/api/premium-analyze", upload.single("video"), async (req, res) => {
 Sirf JSON return karein, kuch aur text nahi.`;
 
     const geminiRes = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || "gemini-2.5-flash-lite"}:generateContent?key=${process.env.GEMINI_API_KEY}`,
       { contents: [{ parts: [{ text: prompt }, ...imageParts] }] }
     );
 
@@ -613,8 +672,9 @@ Sirf JSON return karein, kuch aur text nahi.`;
     const result = JSON.parse(jsonMatch[0]);
     res.json({ success: true, ...result });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "AI analysis mein masla hua. Dobara try karein." });
+    console.error("Premium video analysis error:", JSON.stringify(err.response?.data || err.message));
+    if (err.response?.status) return res.status(err.response.status === 429 ? 429 : 502).json({ error: geminiUserError(err) });
+    res.status(500).json({ error: "Video frames ya AI analysis process nahi ho saka. Render logs check karein." });
   } finally {
     fs.rmSync(framesDir, { recursive: true, force: true });
     fs.unlinkSync(req.file.path);
@@ -625,31 +685,31 @@ Sirf JSON return karein, kuch aur text nahi.`;
 // ---- /api/ai-text ----
 app.post("/api/ai-text", async (req, res) => {
   const { email, task, topic, caption, duration, goal } = req.body || {};
-  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "Server par AI key set nahi hai." });
+  if (!email) return res.status(400).json({ error: "Subscription email zaroori hai." });
+  if (!await isActiveSubscriber(email)) return res.status(402).json({ error: "Is email par active Premium nahi mila. Safepay wali email use karein." });
+  if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: "Render Environment mein GEMINI_API_KEY set nahi hai." });
   if (!topic) return res.status(400).json({ error: "Topic zaroori hai." });
-  if (email) {
-    const allowed = await isActiveSubscriber(email);
-    if (!allowed) return res.status(402).json({ error: "Premium email active nahi hai. Pehle subscribe karein." });
-  }
   const taskMap = {
     hooks: `Generate 8 strong TikTok hooks for the topic: ${topic}. Return concise Roman Urdu/English-friendly hooks. Avoid fake guarantees.`,
     script: `Write a TikTok script for ${topic}. Duration: ${duration || "30 seconds"}. Structure: hook, value, CTA. Keep it practical and natural.`,
     planner: `Create a 30-day TikTok content plan for niche ${topic}. Goal: ${goal || "grow followers"}. Give day number, idea, hook angle and CTA in a compact list.`,
     seo: `Optimize TikTok SEO for topic ${topic}. Existing caption: ${caption || "none"}. Return primary keyword, 5 related keywords, a description, 8 hashtags and a CTA.`,
-    cta: `Generate 10 natural TikTok CTAs for topic ${topic}, optimized for ${goal || "engagement"}.`
+    cta: `Generate 10 natural TikTok CTAs for topic ${topic}, optimized for ${goal || "engagement"}.`,
+    ideas: `Create 15 differentiated TikTok content ideas for niche ${topic}. For each idea include a short title, hook angle, format, and CTA. Avoid generic repeats and fake trends.`,
+    trends: `For niche ${topic}, suggest 10 trend-inspired short-form content angles that can be adapted to the creator's own style. Do not claim these are live trending topics unless current data is provided.`
   };
   const prompt = taskMap[task] || `Help a TikTok creator with topic ${topic}.`;
   try {
     const geminiRes = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      { contents: [{ parts: [{ text: prompt }] }] }
+      `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || "gemini-2.5-flash-lite"}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      { contents: [{ parts: [{ text: prompt }] }] },
+      { timeout: 45000 }
     );
     const text = geminiRes.data?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("\n") || "";
     if (!text) return res.status(500).json({ error: "AI ne empty response diya." });
     res.json({ success: true, text });
   } catch (err) {
-    console.error("AI text error:", JSON.stringify(err.response?.data || err.message));
-    res.status(500).json({ error: "AI response mein masla hua. Thodi der baad try karein." });
+    res.status(err.response?.status === 429 ? 429 : 502).json({ error: geminiUserError(err) });
   }
 });
 
