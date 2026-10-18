@@ -303,8 +303,11 @@ app.get("/api/analyze", async (req, res) => {
     const comments = Number(stats.commentCount || 0);
     const shares = Number(stats.shareCount || 0);
     const caption = item.desc || "";
-    let durationSec = Number(item.video?.duration || 0);
-    if (durationSec > 1000) durationSec = durationSec / 1000;
+    // Providers may return duration in milliseconds (e.g. 20459) or seconds.
+    // Normalize once so a ~20-second clip is displayed as ~20s, not 20459s.
+    let durationSec = Number(item.video?.duration ?? item.duration ?? 0);
+    if (!Number.isFinite(durationSec) || durationSec < 0) durationSec = 0;
+    if (durationSec >= 1000) durationSec = durationSec / 1000;
     durationSec = Math.round(durationSec * 10) / 10;
     const hashtagCount = (caption.match(/#/g) || []).length;
     const genericTags = ["fyp", "viral", "foryou", "foryoupage"];
